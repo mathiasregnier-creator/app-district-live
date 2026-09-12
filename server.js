@@ -2,7 +2,6 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const sqlite3 = require('sqlite3').verbose();
-const cron = require('node-cron');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,7 +16,7 @@ const db = new sqlite3.Database('./district.db', (err) => {
 });
 
 // Chronomètre serveur
-let tempsEcoule = 0; // en secondes
+let tempsEcoule = 0;
 let chronoTimer = null;
 
 db.serialize(() => {
@@ -52,10 +51,6 @@ db.serialize(() => {
                     VALUES ('AAS Cléry Mareau Dry', 'Équipe Adverse', 0, 0, 'À venir', 0)`);
         }
     });
-});
-// Synchro automatique tous les matins à 6h00
-cron.schedule('0 6 * * *', () => {
-    synchroniserMatchFFF();
 });
 
 function lancerChrono(matchId) {
@@ -105,6 +100,16 @@ io.on('connection', (socket) => {
         if (joueurs) socket.emit('mise_a_jour_joueurs', joueurs);
     });
 
+    socket.on('changer_equipe_ext', (data) => {
+        db.run(`UPDATE matchs SET equipe_ext = ? WHERE id = 1`, [data.nomAdversaire], function(err) {
+            if (!err) {
+                db.get("SELECT * FROM matchs WHERE id = 1", (err, match) => {
+                    if (match) io.emit('mise_a_jour_score', match);
+                });
+            }
+        });
+    });
+
     socket.on('modifier_score', (data) => {
         const champ = data.equipe === 'dom' ? 'score_dom' : 'score_ext';
         
@@ -120,16 +125,6 @@ io.on('connection', (socket) => {
                             enregistrerAction(match.id, `⚽ BUT pour ${nomEquipe} ! (${match.score_dom} - ${match.score_ext})`, 'but');
                         }
                     }
-                });
-            }
-        });
-    });
-    // Événement pour changer l'équipe adverse instantanément
-    socket.on('changer_equipe_ext', (data) => {
-        db.run(`UPDATE matchs SET equipe_ext = ? WHERE id = 1`, [data.nomAdversaire], function(err) {
-            if (!err) {
-                db.get("SELECT * FROM matchs WHERE id = 1", (err, match) => {
-                    if (match) io.emit('mise_a_jour_score', match);
                 });
             }
         });
@@ -196,14 +191,9 @@ io.on('connection', (socket) => {
         });
     });
 });
-
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
     console.log(`\n==================================================`);
-    console.log(` Serveur démarré sur le port : ${PORT}`);
+    console.log(` Serveur en ligne sur le port : ${PORT}`);
     console.log(`==================================================\n`);
-});
-
-    // Lancement de la recherche du match dès le démarrage
-    synchroniserMatchFFF();
 });
