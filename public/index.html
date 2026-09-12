@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon Club - Score & Fil du Match</title>
+    <script src="/socket.io/socket.io.js"></script>
+   <style>
+    /* CHARTE GRAPHIQUE AAS CLÉRY MAREAU DRY (VERT & OR) */
+    :root {
+        --couleur-principale: #0b3c26;  /* Vert Sapin / Vert Forêt */
+        --couleur-doree: #d4af37;        /* Or / Doré */
+        --couleur-succes: #27ae60;       /* Vert Gazon pour les buts */
+        --couleur-fond: #f4f6f8;         /* Fond de page neutre */
+    }
+
+    body { 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        background-color: var(--couleur-fond); 
+        margin: 0; 
+        padding: 15px; 
+    }
+    
+    /* En-tête / Header au nom du club */
+    .club-header {
+        background: linear-gradient(135deg, var(--couleur-principale) 0%, #051c12 100%);
+        color: var(--couleur-doree);
+        padding: 18px 15px;
+        border-radius: 12px;
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: 1.5px;
+        border-bottom: 3px solid var(--couleur-doree);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    }
+
+    .card { 
+        background: white; 
+        border-radius: 15px; 
+        padding: 20px; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+        margin-bottom: 20px; 
+        text-align: center; 
+    }
+
+    .badge-live { 
+        background-color: var(--couleur-doree); 
+        color: #0b3c26; 
+        padding: 6px 14px; 
+        border-radius: 20px; 
+        font-weight: 800; 
+        font-size: 12px; 
+        display: inline-block; 
+        text-transform: uppercase; 
+        letter-spacing: 0.5px;
+    }
+
+    .chrono-display { 
+        font-size: 38px; 
+        font-weight: bold; 
+        color: var(--couleur-principale); 
+        margin: 10px 0; 
+        font-family: 'Courier New', Courier, monospace; 
+    }
+
+    .equipes { 
+        display: flex; 
+        justify-content: space-around; 
+        align-items: center; 
+        margin-top: 10px; 
+        font-size: 20px; 
+        font-weight: bold; 
+        color: #2c3e50;
+    }
+
+    .score-box { 
+        font-size: 58px; 
+        font-weight: 800; 
+        color: var(--couleur-principale); 
+        margin: 5px 0; 
+    }
+    
+    .btn-zone { display: flex; justify-content: space-around; margin-top: 15px; gap: 10px; }
+    .control-chrono { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 15px; background: #f8f9fa; padding: 10px; border-radius: 10px; }
+    
+    button { border: none; padding: 10px 14px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    .btn-add { background-color: var(--couleur-succes); color: white; }
+    .btn-remove { background-color: #95a5a6; color: white; }
+    .btn-action { background-color: var(--couleur-principale); color: var(--couleur-doree); border: 1px solid var(--couleur-doree); }
+    .btn-warn { background-color: #e67e22; color: white; }
+    
+    h3 { text-align: left; color: var(--couleur-principale); margin-bottom: 10px; border-bottom: 2px solid var(--couleur-doree); padding-bottom: 5px; }
+    
+    .fil-item { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #f0f0f0; text-align: left; }
+    .fil-minute { background: var(--couleur-principale); color: var(--couleur-doree); border-radius: 6px; padding: 4px 8px; font-weight: bold; font-size: 13px; margin-right: 12px; min-width: 30px; text-align: center; }
+    .fil-texte { font-size: 15px; color: #2c3e50; }
+
+    .joueur-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; text-align: left; }
+    input, select { width: 100%; padding: 10px; margin: 5px 0 15px 0; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div class="club-header">
+    ⚽ AAS CLÉRY MAREAU DRY — LIVE MATCH
+</div>
+    <div class="card">
+        <span class="badge-live" id="statut">À venir</span>
+        <div class="chrono-display" id="chrono-text">00:00</div>
+
+        <div class="equipes">
+            <span id="eq-dom">Équipe Dom.</span>
+            <span>VS</span>
+            <span id="eq-ext">Équipe Ext.</span>
+        </div>
+        <div class="score-box">
+            <span id="score-dom">0</span> - <span id="score-ext">0</span>
+        </div>
+
+        <div class="control-chrono">
+            <button class="btn-action" onclick="actionChrono('start')">▶ 1ère MT</button>
+            <button class="btn-warn" onclick="actionChrono('mitemps')">⏸ Mi-Temps</button>
+            <button class="btn-action" onclick="actionChrono('start2')">▶ 2ème MT</button>
+            <button class="btn-remove" onclick="actionChrono('fin')">⏹ Fin Match</button>
+        </div>
+
+        <div class="btn-zone">
+            <div>
+                <p style="margin:5px 0;">Domicile</p>
+                <button class="btn-add" onclick="changerScore('dom', 1)">+1 But</button>
+                <button class="btn-remove" onclick="changerScore('dom', -1)">-1</button>
+            </div>
+            <div>
+                <p style="margin:5px 0;">Extérieur</p>
+                <button class="btn-add" onclick="changerScore('ext', 1)">+1 But</button>
+                <button class="btn-remove" onclick="changerScore('ext', -1)">-1</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOUVEAU : BLOC FIL DU MATCH -->
+    <div class="card">
+        <h3>Fil du Match</h3>
+        <div id="liste-fil">
+            <p style="color:#888;">Aucun événement pour le moment.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Effectif & Stats Saison</h3>
+        <div id="liste-joueurs"><p>Chargement...</p></div>
+    </div>
+
+    <div class="card">
+        <h3>Ajouter un joueur</h3>
+        <input type="text" id="nom" placeholder="Nom du joueur">
+        <input type="text" id="prenom" placeholder="Prénom">
+        <input type="number" id="numero" placeholder="Numéro">
+        <select id="poste">
+            <option value="Gardien">Gardien</option>
+            <option value="Défenseur">Défenseur</option>
+            <option value="Milieu">Milieu</option>
+            <option value="Attaquant">Attaquant</option>
+        </select>
+        <button class="btn-add" style="width: 100%;" onclick="ajouterJoueur()">Enregistrer le joueur</button>
+    </div>
+
+    <script>
+        const socket = io();
+        let matchIdActuel = 1;
+
+        function formatTemps(secondes) {
+            const m = Math.floor(secondes / 60);
+            const s = secondes % 60;
+            return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+
+        socket.on('tick_chrono', (data) => {
+            document.getElementById('chrono-text').innerText = formatTemps(data.temps);
+        });
+
+        socket.on('mise_a_jour_score', (match) => {
+            matchIdActuel = match.id;
+            document.getElementById('eq-dom').innerText = match.equipe_dom;
+            document.getElementById('eq-ext').innerText = match.equipe_ext;
+            document.getElementById('score-dom').innerText = match.score_dom;
+            document.getElementById('score-ext').innerText = match.score_ext;
+            document.getElementById('statut').innerText = match.statut;
+            document.getElementById('chrono-text').innerText = formatTemps(match.temps);
+        });
+
+        // RÉCEPTION DU FIL DU MATCH
+        socket.on('mise_a_jour_fil', (actions) => {
+            const conteneur = document.getElementById('liste-fil');
+            conteneur.innerHTML = '';
+
+            if (actions.length === 0) {
+                conteneur.innerHTML = '<p style="color:#888;">Aucun événement pour le moment.</p>';
+                return;
+            }
+
+            actions.forEach(a => {
+                conteneur.innerHTML += `
+                    <div class="fil-item">
+                        <span class="fil-minute">${a.minute}'</span>
+                        <span class="fil-texte">${a.texte}</span>
+                    </div>
+                `;
+            });
+        });
+
+        function actionChrono(typeAction) {
+            socket.emit('action_chrono', { id: matchIdActuel, action: typeAction });
+        }
+
+        function changerScore(equipe, delta) {
+            socket.emit('modifier_score', { id: matchIdActuel, equipe: equipe, delta: delta });
+        }
+
+        socket.on('mise_a_jour_joueurs', (joueurs) => {
+            const conteneur = document.getElementById('liste-joueurs');
+            conteneur.innerHTML = '';
+            if (joueurs.length === 0) {
+                conteneur.innerHTML = '<p>Aucun joueur enregistre.</p>';
+                return;
+            }
+            joueurs.forEach(j => {
+                conteneur.innerHTML += `
+                    <div class="joueur-item">
+                        <div>
+                            <div><strong>#${j.numero} ${j.prenom} ${j.nom}</strong> (${j.poste})</div>
+                            <div style="font-size:13px; color:#666;">⚽ ${j.buts} Buts | 👟 ${j.passes} Passes</div>
+                        </div>
+                        <button class="btn-add" onclick="ajouterStat(${j.id}, 'buts')">+1 ⚽</button>
+                    </div>
+                `;
+            });
+        });
+
+        function ajouterJoueur() {
+            const nom = document.getElementById('nom').value;
+            const prenom = document.getElementById('prenom').value;
+            const numero = document.getElementById('numero').value;
+            const poste = document.getElementById('poste').value;
+            if (nom && prenom && numero) {
+                socket.emit('ajouter_joueur', { nom, prenom, numero, poste });
+                document.getElementById('nom').value = '';
+                document.getElementById('prenom').value = '';
+                document.getElementById('numero').value = '';
+            }
+        }
+
+        function ajouterStat(joueurId, type) {
+            socket.emit('ajouter_stat_joueur', { joueur_id: joueurId, type: type });
+        }
+    </script>
+    <div class="card">
+    <h3>⚽ Choix de l'adversaire du jour</h3>
+    <div style="display: flex; gap: 10px;">
+        <input type="text" id="input-adversaire" placeholder="Nom du club adverse (ex: Olivet US)">
+        <button class="btn-action" style="width: 40%;" onclick="mettreAJourAdversaire()">Appliquer</button>
+    </div>
+</div>
+
+<script>
+    function mettreAJourAdversaire() {
+        const nom = document.getElementById('input-adversaire').value.trim();
+        if (nom) {
+            socket.emit('changer_equipe_ext', { nomAdversaire: nom });
+            document.getElementById('input-adversaire').value = '';
+        }
+    }
+</script>
+</body>
+</html>
