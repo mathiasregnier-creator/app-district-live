@@ -197,11 +197,12 @@ io.on('connection', (socket) => {
     });
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
     console.log(`\n==================================================`);
-    console.log(` Serveur démarré sur : http://localhost:${PORT}`);
+    console.log(` Serveur démarré sur le port : ${PORT}`);
     console.log(`==================================================\n`);
+});
 
     // Lancement de la recherche du match dès le démarrage
     synchroniserMatchFFF();
